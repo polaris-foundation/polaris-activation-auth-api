@@ -1,0 +1,71 @@
+[tool.poetry]
+name = "dhos-activation-auth-api"
+version = "0.0.1"
+description = "The Activation, Authentication and Authorisation API for Sensyne Health"
+authors = ["Rob Grant <rob.grant@sensynehealth.com>"]
+keywords = ["Swagger", "Activation", "Auth"]
+repository = "https://github.com/draysontechnologies/dhos-activation-auth-api"
+
+[[tool.poetry.source]]
+name = "sensynehealth"
+url = "https://pypi.fury.io/sensynehealth/"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+auth0-api-client = "1.*"
+dhos-redis = "1.*"
+draymed = "2.*"
+flask-batteries-included = {version="3.*", extras = ["pgsql", "apispec"]}
+kombu-batteries-included = "1.*"
+pycryptodomex = "3.*"
+python-jose = "3.*"
+she-logging = "1.*"
+
+[tool.poetry.dev-dependencies]
+bandit = "*"
+black = "*"
+coloredlogs = "*"
+coverage = "*"
+isort = "*"
+mock = "*"
+mypy = "*"
+pytest = "*"
+pytest-dhos = {version = "*", extras=["fbi"]}
+pytest-flask = "*"
+pytest-mock = "*"
+requests_mock = "*"
+sadisplay = "*"
+safety = "*"
+tox = "*"
+types-PyYAML = "*"
+types-mock = "*"
+types-requests = "*"
+
+[tool.mypy]
+namespace_packages=true
+ignore_missing_imports=false
+disallow_untyped_defs=true
+
+[[tool.mypy.overrides]]
+module = [
+    "requests_mock",
+    "pytest",
+    "environs",
+    "jose",
+    "waitress",
+    "connexion",
+    "pytest_mock",
+    "apispec.*",
+    "apispec_webframeworks.*",
+    "dhosredis",
+    "sadisplay"
+]
+ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+known_third_party = ["Cryptodome", "alembic", "apispec", "apispec_webframeworks", "behave", "click", "clients", "connexion", "dhosredis", "environs", "flask", "flask_batteries_included", "helpers", "jose", "kombu", "kombu_batteries_included", "marshmallow", "mock", "pytest", "pytest_mock", "reporting", "reportportal_behave", "requests", "sadisplay", "she_logging", "sqlalchemy", "waitress", "werkzeug", "yaml"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]

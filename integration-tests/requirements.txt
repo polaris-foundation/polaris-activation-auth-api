@@ -1,0 +1,14 @@
+assertpy==1.*
+behave
+black
+environs
+isort
+kombu==4.*
+mypy
+psycopg2-binary==2.*
+python-jose==3.*
+reportportal-behave-client==1.*
+requests==2.*
+she_logging
+SQLAlchemy==1.3.*
+typing_extensions==3.*

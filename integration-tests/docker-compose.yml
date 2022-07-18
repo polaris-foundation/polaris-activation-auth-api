@@ -1,0 +1,101 @@
+x-environment:
+  &COMMON_ENVIRONMENT
+  ENVIRONMENT: DEVELOPMENT
+  PROXY_URL: http://localhost
+  HS_ISSUER: http://localhost/
+  HS_KEY: secret
+  REDIS_HOST: localhost
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: any
+  LOG_LEVEL: DEBUG
+  LOG_FORMAT: COLOUR
+  AUTH0_MGMT_CLIENT_ID: "doesnotmatter"
+  AUTH0_MGMT_CLIENT_SECRET: "shhh"
+  AUTH0_AUTHZ_CLIENT_ID: "doesnotmatter"
+  AUTH0_AUTHZ_CLIENT_SECRET: "shhh"
+  AUTH0_AUTHZ_WEBTASK_URL: "doesnotmatter"
+  AUTH0_CLIENT_ID: "doesnotmatter"
+  AUTH0_AUDIENCE: "http://localhost/"
+  NONCUSTOM_AUTH0_DOMAIN: "https://integration-tests"
+  AUTH0_CUSTOM_DOMAIN: "dev"
+  DISABLE_CREATE_USER_IN_AUTH0: "True"
+  AUTH0_HS_KEY: "secret"
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_USERNAME: guest
+  RABBITMQ_PASSWORD: guest
+  
+services:
+  dhos-activation-auth-integration-tests:
+    container_name: "dhos-activation-auth-integration-tests"
+    build:
+      context: ./
+      dockerfile: Dockerfile
+      args:
+        - PIP_EXTRA_INDEX_URL
+    environment:
+      <<: *COMMON_ENVIRONMENT
+      BEHAVE_ARGS: ${BEHAVE_ARGS:-}
+      REPORT_PORTAL_URL: ${REPORT_PORTAL_URL:-}
+      REPORT_PORTAL_TOKEN: ${REPORT_PORTAL_TOKEN:-}
+      REPORT_PORTAL_PROJECT: ${REPORT_PORTAL_PROJECT:-}
+      ENVIRONMENT: ${ENVIRONMENT:-}
+      RELEASE: ${RELEASE:-}
+      SYSTEM_JWT_SCOPE: write:gdm_activation write:send_device write:send_clinician read:send_device
+    command: >
+      bash -c "behave --no-capture --no-logcapture ${BEHAVE_ARGS:-}"
+    depends_on:
+      "dhos-activation-auth-api":
+        condition: service_healthy
+
+  dhos-activation-auth-api:
+    container_name: "dhos-activation-auth-api"
+    build:
+      context: ..
+      args:
+        - GEMFURY_DOWNLOAD_KEY
+    environment:
+      <<: *COMMON_ENVIRONMENT
+      DATABASE_HOST: dhos-activation-auth-api-db
+      DATABASE_PORT: 5432
+      DATABASE_USER: dhos-activation-auth-api
+      DATABASE_PASSWORD: dhos-activation-auth-api
+      DATABASE_NAME: dhos-activation-auth-api
+      MOCK_SEND_ENTRY_DEVICE_SCOPE: read:send_entry_identifier
+    command: >
+      bash -c "flask db upgrade && python -m dhos_activation_auth_api"
+    healthcheck:
+      test: curl -f http://localhost:5000/running || false
+      interval: 3s
+      retries: 40
+      start_period: 10s
+    depends_on:
+      "dhos-activation-auth-api-db":
+        condition: service_healthy
+      "rabbitmq":
+        condition: service_healthy
+
+  dhos-activation-auth-api-db:
+    container_name: "dhos-activation-auth-api-db"
+    image: docker.io/postgres
+    environment:
+      <<: *COMMON_ENVIRONMENT
+      POSTGRES_USER: dhos-activation-auth-api
+      POSTGRES_PASSWORD: dhos-activation-auth-api
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER}" ]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  rabbitmq:
+    container_name: "rabbitmq"
+    image: docker.io/rabbitmq:3.8-management-alpine
+    healthcheck:
+      test: rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    ports:
+      - "5672:5672"
+      - "15672:15672"

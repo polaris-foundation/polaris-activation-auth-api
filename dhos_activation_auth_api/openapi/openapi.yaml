@@ -1,0 +1,929 @@
+openapi: 3.0.3
+info:
+  description: The DHOS Activation Auth API is responsible for activation, authentication
+    and authorisation of users via JWT.
+  title: DHOS Activation Auth API
+  version: 1.0.0
+paths:
+  /running:
+    get:
+      summary: Verify service is running
+      description: Verifies that the service is running. Used for monitoring in kubernetes.
+      tags:
+      - monitoring
+      responses:
+        '200':
+          description: If we respond, we are running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  running:
+                    type: boolean
+                    example: true
+      operationId: flask_batteries_included.blueprint_monitoring.app_running
+  /version:
+    get:
+      summary: Get version information
+      description: Get the version number, circleci build number, and git hash.
+      tags:
+      - monitoring
+      responses:
+        '200':
+          description: Version numbers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  circle:
+                    type: string
+                    example: '1234'
+                  hash:
+                    type: string
+                    example: 366c204
+      operationId: flask_batteries_included.blueprint_monitoring.app_version
+  /dhos/v1/patient/{patient_id}/activation:
+    post:
+      summary: Create a new patient activation
+      description: Create a new activation for a patient. Responds with a shortened
+        URL and a one-time-pin, to be used once to validate the activation.
+      tags:
+      - patient-auth
+      parameters:
+      - name: patient_id
+        in: path
+        required: true
+        description: The UUID of the patient for which to create an activation
+        schema:
+          type: string
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      responses:
+        '200':
+          description: Creates a patient activation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivationResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.create_patient_activation
+      security:
+      - bearerAuth: []
+    get:
+      summary: Get a patient's activations
+      description: Responds with a list of activations created for the specified patient
+        UUID.
+      tags:
+      - patient-auth
+      parameters:
+      - name: patient_id
+        in: path
+        required: true
+        description: The UUID of the patient for which to retrive activations
+        schema:
+          type: string
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      responses:
+        '200':
+          description: A list of patient activations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivationHistory'
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.get_patient_activations
+      security:
+      - bearerAuth: []
+  /dhos/v1/patient/{patient_id}/jwt:
+    get:
+      summary: Get a JWT for a patient
+      description: Responds with a valid patient JWT. Requires the `x-authorisation-code`
+        header containing an authorisation code acquired by validating a patient activation.
+      tags:
+      - patient-auth
+      parameters:
+      - name: patient_id
+        in: path
+        required: true
+        description: UUID of the patient
+        schema:
+          type: string
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      - name: x-authorisation-code
+        in: header
+        description: An authorisation header
+        required: true
+        schema:
+          type: string
+          example: 5kjhw45kjh74
+      responses:
+        '200':
+          description: A structure containing a valid patient JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.get_patient_jwt
+  /dhos/v1/clinician:
+    post:
+      summary: Create a clinician for device auth
+      description: Create a clinician object, only to be used for storing clinician
+        login details. Not to be confused with the clinician object in the Polaris
+        Users API.
+      tags:
+      - clinician-auth
+      requestBody:
+        description: Details of the clinician to save
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicianCreate'
+      responses:
+        '201':
+          description: Clinician created successfully
+        default:
+          description: Error, e.g. 400 Bad Request, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.create_clinician
+      security:
+      - bearerAuth: []
+  /dhos/v1/clinician/{clinician_id}:
+    patch:
+      summary: Update a clinician instance for device auth
+      description: Update a clinician object, only to be used for storing clinician
+        login details.
+      tags:
+      - clinician-auth
+      parameters:
+      - name: clinician_id
+        in: path
+        required: true
+        description: UUID of the clinician to update
+        schema:
+          type: string
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      requestBody:
+        description: Details to update for the clinician
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicianPatch'
+      responses:
+        '200':
+          description: Clinician updated successfully
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.update_clinician
+      security:
+      - bearerAuth: []
+  /dhos/v1/clinician/jwt:
+    get:
+      summary: Get a JWT for a clinician
+      description: Responds with a valid clinician JWT. Requires a device JWT for
+        authorisation.
+      tags:
+      - clinician-auth
+      parameters:
+      - name: send_entry_identifier
+        in: query
+        required: true
+        description: SEND entry identifier for the clinician
+        schema:
+          type: string
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      responses:
+        '200':
+          description: A structure containing a valid clinician JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.create_clinician_jwt
+      security:
+      - bearerAuth: []
+  /dhos/v1/device:
+    post:
+      summary: Create a new device
+      description: Create a known device containing details including location and
+        name.
+      tags:
+      - device-auth
+      requestBody:
+        description: The device information to save
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRequest'
+      parameters:
+      - name: type
+        in: query
+        required: false
+        description: The device type
+        schema:
+          type: string
+          example: send_entry
+      responses:
+        '200':
+          description: Returns details of the created device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.create_device
+      security:
+      - bearerAuth: []
+    get:
+      summary: Get a list of devices
+      description: Responds with a list of known devices, containing details such
+        as location and name.
+      tags:
+      - device-auth
+      parameters:
+      - name: location_id
+        in: query
+        required: false
+        description: UUID of a location, for filtering the device list
+        schema:
+          type: string
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+      - name: active
+        in: query
+        required: false
+        description: Whether to filter by active/inactive devices
+        schema:
+          type: boolean
+          example: true
+      responses:
+        '200':
+          description: A list of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+        default:
+          description: Error, e.g. 400 Bad Request, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.get_devices
+      security:
+      - bearerAuth: []
+  /dhos/v1/device/{device_id}:
+    get:
+      summary: Get a device by UUID
+      description: Get details of the known device with the specified UUID.
+      tags:
+      - device-auth
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        description: The device UUID
+        schema:
+          type: string
+          example: cc71c130-dbc8-4961-a462-a491523a9f8c
+      responses:
+        '200':
+          description: Details of the device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.get_device_by_id
+      security:
+      - bearerAuth: []
+    patch:
+      summary: Update a device by UUID
+      description: Update details of the known device with the specified UUID.
+      tags:
+      - device-auth
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        description: The id of the device to return
+        schema:
+          type: string
+          example: cc71c130-dbc8-4961-a462-a491523a9f8c
+      requestBody:
+        description: device fields to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: An object containing the device details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.update_device
+      security:
+      - bearerAuth: []
+  /dhos/v1/device/{device_id}/activation:
+    post:
+      summary: Create a device activation
+      description: Create a new activation for a known device. Responds with an activation
+        code, to be used once to validate the activation.
+      tags:
+      - device-auth
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        description: The UUID of the device for which to create an activation
+        schema:
+          type: string
+          example: cc71c130-dbc8-4961-a462-a491523a9f8c
+      responses:
+        '200':
+          description: object containing the code and expiry time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceActivationResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.create_device_activation
+      security:
+      - bearerAuth: []
+  /dhos/v1/device/{device_id}/jwt:
+    get:
+      summary: Get a JWT for a device
+      description: Responds with a valid device JWT. Requires the `x-authorisation-code`
+        header containing a code acquired by validating a device activation.
+      tags:
+      - device-auth
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        description: UUID of the device
+        schema:
+          type: string
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      - name: x-authorisation-code
+        in: header
+        description: An authorisation header
+        required: true
+        schema:
+          type: string
+          example: swe87ftys78eftse87tf
+      responses:
+        '200':
+          description: A structure containing a valid device JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.get_device_jwt
+  /dhos/v1/activation/{activation_code}:
+    post:
+      summary: Validate an activation
+      description: Validate ('activate') a previously-created activation for a patient
+        or device. Requires the one-time-PIN (OTP) provided when the activation was
+        created. Responds with a valid authorisation code to be used to retrieve a
+        JWT.
+      tags:
+      - activation
+      parameters:
+      - name: activation_code
+        in: path
+        required: true
+        description: the activation code associated with the device
+        schema:
+          type: string
+          example: 45f234jfg634hjg6
+      - name: type
+        in: query
+        required: false
+        description: The device type
+        schema:
+          type: string
+          example: send_entry
+      requestBody:
+        description: The one time PIN that confirms the activation
+        required: false
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - $ref: '#/components/schemas/AuthorisationRequest'
+      responses:
+        '200':
+          description: Object containing the code and expiry time
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/ValidateDeviceActivationResponse'
+                - $ref: '#/components/schemas/ValidatePatientActivationResponse'
+        default:
+          description: Error, e.g. 400 Bad Request, 404 Not Found, 503 Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: dhos_activation_auth_api.blueprint_api.validate_activation
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP response code
+          example: 404
+        message:
+          type: string
+          description: Message attached to response
+          example: Not Found
+      required:
+      - code
+      description: An error response in json format
+    ActivationResponse:
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Universally unique identifier for object
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        created:
+          type: string
+          description: When the object was created
+          example: '2017-09-23T08:29:19.123+00:00'
+        created_by:
+          type: string
+          description: UUID of the user that created the object
+          example: d26570d8-a2c9-4906-9c6a-ea1a98b8b80f
+        modified:
+          type: string
+          description: When the object was modified
+          example: '2017-09-23T08:29:19.123+00:00'
+        modified_by:
+          type: string
+          description: UUID of the user that modified the object
+          example: 2a0e26e5-21b6-463a-92e8-06d7290067d0
+        otp:
+          type: string
+          description: The one time PIN for the activation
+          example: UG6L2
+        activation_code:
+          type: string
+          description: The activation code to use when validating the activation
+          example: d84J7dGhJa5YI8435798w4dHf8skjd
+        expires_at:
+          type: string
+          description: ISO8601 timestamp at which the activation expires
+          example: '2018-03-26T23:59:59.000Z'
+      required:
+      - activation_code
+      - created
+      - created_by
+      - expires_at
+      - modified
+      - modified_by
+      - otp
+      - uuid
+      title: Activation response
+    ActivationHistory:
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Universally unique identifier for object
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        created:
+          type: string
+          description: When the object was created
+          example: '2017-09-23T08:29:19.123+00:00'
+        created_by:
+          type: string
+          description: UUID of the user that created the object
+          example: d26570d8-a2c9-4906-9c6a-ea1a98b8b80f
+        modified:
+          type: string
+          description: When the object was modified
+          example: '2017-09-23T08:29:19.123+00:00'
+        modified_by:
+          type: string
+          description: UUID of the user that modified the object
+          example: 2a0e26e5-21b6-463a-92e8-06d7290067d0
+        activation_completed:
+          type: string
+          description: ISO8601 timestamp at which the activation was validated
+          example: '2018-03-26T23:59:59.000Z'
+      required:
+      - activation_completed
+      - created
+      - created_by
+      - modified
+      - modified_by
+      - uuid
+      title: Activation history
+    AuthorisationRequest:
+      nullable: true
+      type: object
+      properties:
+        otp:
+          type: string
+          nullable: true
+          description: The one time PIN for the activation
+          example: H3K5
+      required:
+      - otp
+      title: Authorisation request
+    ValidatePatientActivationResponse:
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Universally unique identifier for object
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        created:
+          type: string
+          description: When the object was created
+          example: '2017-09-23T08:29:19.123+00:00'
+        created_by:
+          type: string
+          description: UUID of the user that created the object
+          example: d26570d8-a2c9-4906-9c6a-ea1a98b8b80f
+        modified:
+          type: string
+          description: When the object was modified
+          example: '2017-09-23T08:29:19.123+00:00'
+        modified_by:
+          type: string
+          description: UUID of the user that modified the object
+          example: 2a0e26e5-21b6-463a-92e8-06d7290067d0
+        authorisation_code:
+          type: string
+          description: Authorisation code used to request JWTs for this patient
+          example: YW3OFH7W398FH3WP98JF038WUGP927P2GSGA87985SG6D5F78FG
+        patient_id:
+          type: string
+          description: UUID of patient this activation relates to
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+      required:
+      - authorisation_code
+      - created
+      - created_by
+      - modified
+      - modified_by
+      - patient_id
+      - uuid
+      title: Authorisation response
+    ClinicianCreate:
+      type: object
+      properties:
+        clinician_id:
+          type: string
+          description: The UUID of the clinician in DHOS Services
+          example: ab3d9aa3-d5aa-406a-87b2-cd67ad872724
+        send_entry_identifier:
+          type: string
+          nullable: true
+          description: Clinician's identifier for SEND Entry
+          example: '666123'
+        login_active:
+          type: boolean
+          description: Whether login is currently active
+          example: true
+        products:
+          type: array
+          description: Products the clinician is associated with
+          example:
+          - GDM
+          items:
+            type: string
+        groups:
+          type: array
+          description: Names of the groups the clinician belongs to
+          example:
+          - GDM Superclinician
+          items:
+            type: string
+        contract_expiry_eod_date:
+          type: string
+          nullable: true
+          description: ISO8601 date of the clinician login expiry
+          example: '2019-03-26'
+      required:
+      - clinician_id
+      - login_active
+      - products
+      title: Clinician create
+    ClinicianPatch:
+      type: object
+      properties:
+        send_entry_identifier:
+          type: string
+          nullable: true
+          description: Clinician's identifier for SEND Entry
+          example: '666123'
+        login_active:
+          type: boolean
+          description: Whether login is currently active
+          example: true
+        products:
+          type: array
+          description: Products the clinician is associated with
+          example:
+          - GDM
+          items:
+            type: string
+        groups:
+          type: array
+          description: Names of the groups the clinician belongs to
+          example:
+          - GDM Superclinician
+          items:
+            type: string
+        contract_expiry_eod_date:
+          type: string
+          nullable: true
+          description: ISO8601 date of the clinician login expiry
+          example: '2019-03-26'
+      required:
+      - groups
+      - products
+      title: Clinician update
+    JwtResponse:
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Universally unique identifier for object
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        created:
+          type: string
+          description: When the object was created
+          example: '2017-09-23T08:29:19.123+00:00'
+        created_by:
+          type: string
+          description: UUID of the user that created the object
+          example: d26570d8-a2c9-4906-9c6a-ea1a98b8b80f
+        modified:
+          type: string
+          description: When the object was modified
+          example: '2017-09-23T08:29:19.123+00:00'
+        modified_by:
+          type: string
+          description: UUID of the user that modified the object
+          example: 2a0e26e5-21b6-463a-92e8-06d7290067d0
+        jwt:
+          type: string
+          description: JWT bearer token to authorise the user
+          example: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9
+      required:
+      - created
+      - created_by
+      - jwt
+      - modified
+      - modified_by
+      - uuid
+      title: JWT response
+    DeviceRequest:
+      type: object
+      properties:
+        location_id:
+          type: string
+          description: the UUID of the location that holds the device
+          example: c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        description:
+          type: string
+          description: free text description of the device
+          example: Jon's SEND Tablet
+      required:
+      - description
+      - location_id
+      title: Device request
+    DeviceResponse:
+      type: object
+      properties:
+        location_id:
+          type: string
+          description: the UUID of the location that holds the device
+          example: c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        description:
+          type: string
+          description: free text description of the device
+          example: Jon's SEND Tablet
+        uuid:
+          type: string
+          description: Universally unique identifier for object
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        created:
+          type: string
+          description: When the object was created
+          example: '2017-09-23T08:29:19.123+00:00'
+        created_by:
+          type: string
+          description: UUID of the user that created the object
+          example: d26570d8-a2c9-4906-9c6a-ea1a98b8b80f
+        modified:
+          type: string
+          description: When the object was modified
+          example: '2017-09-23T08:29:19.123+00:00'
+        modified_by:
+          type: string
+          description: UUID of the user that modified the object
+          example: 2a0e26e5-21b6-463a-92e8-06d7290067d0
+      required:
+      - created
+      - created_by
+      - description
+      - location_id
+      - modified
+      - modified_by
+      - uuid
+      title: Device response
+    DeviceUpdate:
+      type: object
+      properties:
+        location_id:
+          type: string
+          description: the UUID of the location that holds the device
+          example: c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        description:
+          type: string
+          description: free text description of the device
+          example: Jon's SEND Tablet
+        active:
+          type: boolean
+          description: Whether the device is currently active
+          example: false
+      title: Device update
+    DeviceActivationResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: the activation code for the device
+          example: c4f1d2429524d4eb1d13637e33cc161
+        description:
+          type: string
+          description: free text description of the device
+          example: Jon's SEND Tablet
+        expires_at:
+          type: string
+          description: ISO8601 timestamp at which the activation expires
+          example: '2018-03-26T23:59:59.000Z'
+      required:
+      - code
+      - description
+      - expires_at
+      title: Device activation response
+    ValidateDeviceActivationResponse:
+      type: object
+      properties:
+        authorisation_code:
+          type: string
+          description: Device authorisation code
+          example: c4f1d2429524d4eb1d13637e33cc161
+        device_id:
+          type: string
+          description: the UUID of the device that this auth code applies to
+          example: c4f1d24-2952-4d4e-b1d1-3637e33cc161
+      required:
+      - authorisation_code
+      - device_id
+      title: Validate device activation response
+    Device:
+      type: object
+      properties:
+        location_id:
+          type: string
+          description: the UUID of the location that holds the device
+          example: c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        description:
+          type: string
+          description: free text description of the device
+          example: Jon's SEND Tablet
+        uuid:
+          type: string
+          description: Universally unique identifier for object
+          example: 2c4f1d24-2952-4d4e-b1d1-3637e33cc161
+        created:
+          type: string
+          description: When the object was created
+          example: '2017-09-23T08:29:19.123+00:00'
+        created_by:
+          type: string
+          description: UUID of the user that created the object
+          example: d26570d8-a2c9-4906-9c6a-ea1a98b8b80f
+        modified:
+          type: string
+          description: When the object was modified
+          example: '2017-09-23T08:29:19.123+00:00'
+        modified_by:
+          type: string
+          description: UUID of the user that modified the object
+          example: 2a0e26e5-21b6-463a-92e8-06d7290067d0
+      required:
+      - created
+      - created_by
+      - description
+      - location_id
+      - modified
+      - modified_by
+      - uuid
+      title: Device response
+  responses:
+    BadRequest:
+      description: Bad or malformed request was received
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: Service or dependent resource not available
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
