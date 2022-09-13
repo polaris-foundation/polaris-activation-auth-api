@@ -1,14 +1,10 @@
 [tool.poetry]
 name = "dhos-activation-auth-api"
 version = "0.0.1"
-description = "The Activation, Authentication and Authorisation API for Sensyne Health"
+description = "The Activation, Authentication and Authorisation API for Polaris"
 authors = ["Rob Grant <rob.grant@sensynehealth.com>"]
-keywords = ["Swagger", "Activation", "Auth"]
-repository = "https://github.com/draysontechnologies/dhos-activation-auth-api"
-
-[[tool.poetry.source]]
-name = "sensynehealth"
-url = "https://pypi.fury.io/sensynehealth/"
+keywords = ["Swagger", "Activation", "Auth", "Polaris"]
+repository = "https://github.com/polaris-foundation/polaris-activation-auth-api"
 
 [tool.poetry.dependencies]
 python = "^3.9"
